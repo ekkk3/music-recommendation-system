@@ -17,7 +17,7 @@ const GENRE_COLORS = {
 
 const getGenreColor = (genre) => GENRE_COLORS[genre] || "#94A3B8";
 
-function TrackCard({ track, isSelected, onClick, showSimilarity }) {
+function TrackCard({ track, isSelected, isFavorited, onClick, onFavorite, showSimilarity }) {
   const color = getGenreColor(track.genre);
 
   return (
@@ -39,12 +39,23 @@ function TrackCard({ track, isSelected, onClick, showSimilarity }) {
             {track.artist_name} · {track.year}
           </p>
         </div>
-        <span
-          className="track-card__genre"
-          style={{ background: `${color}18`, color: color }}
-        >
-          {track.genre}
-        </span>
+        <div className="track-card__actions">
+          {onFavorite && (
+            <button
+              className={`track-card__fav-btn ${isFavorited ? "track-card__fav-btn--active" : ""}`}
+              onClick={onFavorite}
+              title={isFavorited ? "Bo khoi gio yeu thich" : "Them vao gio yeu thich"}
+            >
+              {isFavorited ? "\u2665" : "\u2661"}
+            </button>
+          )}
+          <span
+            className="track-card__genre"
+            style={{ background: `${color}18`, color: color }}
+          >
+            {track.genre}
+          </span>
+        </div>
       </div>
 
       {showSimilarity && track.similarity_pct !== undefined && (

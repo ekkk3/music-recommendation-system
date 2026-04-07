@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import apiService from "./services/api";
 import SearchBar from "./components/SearchBar";
 import StepIndicator from "./components/StepIndicator";
@@ -26,17 +26,35 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTracks, setTotalTracks] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Favorites (gio bai hat yeu thich) - dung cho /api/recommend/batch
+  const [favorites, setFavorites] = useState([]);
+  const [favMode, setFavMode] = useState(false);
+
+  // AbortController ref de huy request search cu
+  const searchAbortRef = useRef(null);
+
+  const PER_PAGE = 20;
+
   // ===== Load initial data =====
   useEffect(() => {
     const loadInitial = async () => {
       try {
         const [tracksRes, genresRes, moodsRes, statsRes] = await Promise.all([
-          apiService.getTracks("", 80),
+          apiService.getTracks("", 1, PER_PAGE),
           apiService.getGenres(),
           apiService.getMoods(),
           apiService.getStats(),
         ]);
         setTracks(tracksRes.data);
+        setPage(tracksRes.page);
+        setTotalPages(tracksRes.total_pages);
+        setTotalTracks(tracksRes.total);
         setGenres(genresRes.data);
         setMoods(moodsRes.data);
         setStats(statsRes.data);
@@ -48,18 +66,48 @@ function App() {
     loadInitial();
   }, []);
 
-  // ===== Search tracks =====
+  // ===== Search tracks (voi AbortController fix race condition) =====
   useEffect(() => {
     const timer = setTimeout(async () => {
+      // Huy request truoc do neu con dang chay
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
       try {
-        const res = await apiService.getTracks(search, 40);
+        const res = await apiService.getTracks(search, 1, PER_PAGE, controller.signal);
         setTracks(res.data);
+        setPage(res.page);
+        setTotalPages(res.total_pages);
+        setTotalTracks(res.total);
       } catch (err) {
-        console.error("Search failed:", err);
+        if (err.name !== "AbortError") {
+          console.error("Search failed:", err);
+        }
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // ===== Load More (trang tiep theo) =====
+  const handleLoadMore = useCallback(async () => {
+    if (page >= totalPages || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await apiService.getTracks(search, nextPage, PER_PAGE);
+      setTracks((prev) => [...prev, ...res.data]);
+      setPage(res.page);
+      setTotalPages(res.total_pages);
+    } catch (err) {
+      console.error("Load more failed:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, totalPages, loadingMore, search]);
 
   // ===== Select track =====
   const handleSelectTrack = useCallback((track) => {
@@ -67,18 +115,43 @@ function App() {
     setStep(2);
   }, []);
 
+  // ===== Toggle Favorite =====
+  const handleToggleFavorite = useCallback((track, e) => {
+    e.stopPropagation();
+    setFavorites((prev) => {
+      const exists = prev.find((f) => f.id === track.id);
+      if (exists) {
+        return prev.filter((f) => f.id !== track.id);
+      }
+      return [...prev, track];
+    });
+  }, []);
+
   // ===== Get recommendations =====
   const handleRecommend = useCallback(async () => {
-    if (!selectedTrack) return;
+    if (!favMode && !selectedTrack) return;
+    if (favMode && favorites.length === 0) return;
+
     setLoading(true);
     setError(null);
     try {
-      const res = await apiService.recommend(
-        selectedTrack.id,
-        selectedGenre || null,
-        selectedMood || null,
-        10
-      );
+      let res;
+      if (favMode && favorites.length > 0) {
+        // Dung batch API cho gio yeu thich
+        res = await apiService.recommendBatch(
+          favorites.map((f) => f.id),
+          selectedGenre || null,
+          selectedMood || null,
+          10
+        );
+      } else {
+        res = await apiService.recommend(
+          selectedTrack.id,
+          selectedGenre || null,
+          selectedMood || null,
+          10
+        );
+      }
       setRecommendations(res.data.recommendations);
       setStep(3);
     } catch (err) {
@@ -87,7 +160,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTrack, selectedGenre, selectedMood]);
+  }, [selectedTrack, selectedGenre, selectedMood, favMode, favorites]);
 
   // ===== View track detail =====
   const handleViewDetail = useCallback(
@@ -106,7 +179,20 @@ function App() {
     setRecommendations([]);
     setDetailTrack(null);
     setSearch("");
+    setFavMode(false);
   }, []);
+
+  // ===== Toggle fav mode =====
+  const handleToggleFavMode = useCallback(() => {
+    setFavMode((prev) => !prev);
+    if (!favMode) {
+      // Khi bat fav mode, neu co favorites thi chuyen sang step 2
+      setSelectedTrack(null);
+      if (favorites.length > 0) {
+        setStep(2);
+      }
+    }
+  }, [favMode, favorites]);
 
   return (
     <div className="app">
@@ -137,7 +223,45 @@ function App() {
       <main className="app__main">
         {error && (
           <div className="app__error">
-            <span>⚠</span> {error}
+            <span>!</span> {error}
+          </div>
+        )}
+
+        {/* ----- FAVORITES BAR ----- */}
+        {favorites.length > 0 && step < 3 && (
+          <div className="app__favorites-bar">
+            <div className="app__favorites-header">
+              <span className="app__favorites-label">
+                Gio yeu thich ({favorites.length})
+              </span>
+              <button
+                className={`app__fav-mode-btn ${favMode ? "app__fav-mode-btn--active" : ""}`}
+                onClick={handleToggleFavMode}
+              >
+                {favMode ? "Dang dung gio yeu thich" : "Goi y tu gio yeu thich"}
+              </button>
+            </div>
+            <div className="app__favorites-list">
+              {favorites.map((f) => (
+                <span key={f.id} className="app__fav-chip">
+                  {f.track_name}
+                  <button
+                    className="app__fav-chip-remove"
+                    onClick={(e) => handleToggleFavorite(f, e)}
+                  >
+                    x
+                  </button>
+                </span>
+              ))}
+            </div>
+            {favMode && favorites.length > 0 && step < 2 && (
+              <button
+                className="app__fav-proceed-btn"
+                onClick={() => setStep(2)}
+              >
+                Tiep tuc chon bo loc
+              </button>
+            )}
           </div>
         )}
 
@@ -164,7 +288,9 @@ function App() {
                   key={t.id}
                   track={t}
                   isSelected={selectedTrack?.id === t.id}
+                  isFavorited={favorites.some((f) => f.id === t.id)}
                   onClick={() => handleSelectTrack(t)}
+                  onFavorite={(e) => handleToggleFavorite(t, e)}
                   showSimilarity={false}
                 />
               ))}
@@ -175,7 +301,22 @@ function App() {
               )}
             </div>
 
-            {selectedTrack && (
+            {/* Load More button */}
+            {page < totalPages && (
+              <div className="app__load-more">
+                <button
+                  className="app__load-more-btn"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore
+                    ? "Dang tai..."
+                    : `Tai them (${tracks.length}/${totalTracks})`}
+                </button>
+              </div>
+            )}
+
+            {selectedTrack && !favMode && (
               <div className="app__selected-banner">
                 <span className="app__selected-label">Da chon:</span>
                 <strong>{selectedTrack.track_name}</strong>
@@ -211,6 +352,8 @@ function App() {
               onMoodChange={setSelectedMood}
               onSubmit={handleRecommend}
               loading={loading}
+              favMode={favMode}
+              favCount={favorites.length}
             />
           </section>
         )}
@@ -222,6 +365,9 @@ function App() {
               <h3 className="app__section-title" style={{ marginBottom: 0 }}>
                 <span className="app__section-num">3</span>
                 Ket qua goi y ({recommendations.length} bai hat)
+                {favMode && (
+                  <span className="app__results-badge">Tu gio yeu thich</span>
+                )}
               </h3>
               <button className="app__reset-btn" onClick={handleReset}>
                 Lam lai
@@ -236,7 +382,9 @@ function App() {
                       key={t.id}
                       track={t}
                       isSelected={detailTrack?.id === t.id}
+                      isFavorited={favorites.some((f) => f.id === t.id)}
                       onClick={() => handleViewDetail(t)}
+                      onFavorite={(e) => handleToggleFavorite(t, e)}
                       showSimilarity={true}
                     />
                   ))}
@@ -300,13 +448,15 @@ function App() {
             He thong su dung 8 dac trung am nhac (danceability, energy, valence,
             tempo, acousticness, instrumentalness, liveness, speechiness) de
             bieu dien moi bai hat duoi dang vector. Sau khi chuan hoa bang
-            MinMaxScaler, he thong tinh Cosine Similarity giua bai hat ban chon
-            va tat ca bai hat con lai, sau do sap xep theo do tuong dong giam
-            dan va tra ve top-10 ket qua.
+            MinMaxScaler, he thong tinh Cosine Similarity on-the-fly giua bai
+            hat ban chon va tat ca bai hat con lai, sau do sap xep theo do tuong
+            dong giam dan va tra ve top-10 ket qua. Mood filters duoc tinh
+            tu percentile du lieu thuc te. Ket qua duoc da dang hoa bang
+            randomness cho cac bai hat co diem tuong dong xap xi.
           </p>
           <p className="app__algo-footer">
             Backend: Python Flask + Scikit-learn · Frontend: React.js · Dataset:
-            80 bai hat (Spotify audio features)
+            Spotify audio features
           </p>
         </section>
       </main>

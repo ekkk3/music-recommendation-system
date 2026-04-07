@@ -45,6 +45,33 @@
   margin: 3px 0 0;
 }
 
+.track-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.track-card__fav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: #4b5563;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.track-card__fav-btn:hover {
+  color: #f472b6;
+  transform: scale(1.2);
+}
+
+.track-card__fav-btn--active {
+  color: #f472b6;
+}
+
 .track-card__genre {
   font-size: 10px;
   font-weight: 600;

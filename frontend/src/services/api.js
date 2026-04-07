@@ -1,13 +1,17 @@
 /**
  * API Service - Giao tiep voi Backend Flask API
  * Base URL co the thay doi qua bien moi truong REACT_APP_API_URL
+ *
+ * Cai tien:
+ * - Ho tro AbortController de huy request cu (fix race condition)
+ * - Ho tro pagination (page, per_page)
  */
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 class ApiService {
   /**
-   * Goi API chung
+   * Goi API chung (ho tro AbortController signal)
    */
   async _fetch(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
@@ -26,6 +30,10 @@ class ApiService {
 
       return data;
     } catch (error) {
+      if (error.name === "AbortError") {
+        // Request bi huy boi AbortController — khong log loi
+        throw error;
+      }
       console.error(`[API] ${endpoint} failed:`, error);
       throw error;
     }
@@ -33,12 +41,14 @@ class ApiService {
 
   // ===== TRACKS =====
 
-  /** Lay danh sach bai hat (co the tim kiem) */
-  async getTracks(query = "", limit = 20) {
+  /** Lay danh sach bai hat (co phan trang, ho tro AbortController) */
+  async getTracks(query = "", page = 1, perPage = 20, signal = null) {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
-    if (limit) params.set("limit", limit);
-    return this._fetch(`/tracks?${params.toString()}`);
+    params.set("page", page);
+    params.set("per_page", perPage);
+    const options = signal ? { signal } : {};
+    return this._fetch(`/tracks?${params.toString()}`, options);
   }
 
   /** Lay chi tiet 1 bai hat */
@@ -73,7 +83,7 @@ class ApiService {
     });
   }
 
-  /** Goi y nhac tu nhieu bai hat (batch) */
+  /** Goi y nhac tu nhieu bai hat (batch - gio bai hat yeu thich) */
   async recommendBatch(trackIds, genre = null, mood = null, topN = 10) {
     return this._fetch("/recommend/batch", {
       method: "POST",

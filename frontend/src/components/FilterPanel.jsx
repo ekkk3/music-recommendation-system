@@ -10,9 +10,17 @@ function FilterPanel({
   onMoodChange,
   onSubmit,
   loading,
+  favMode,
+  favCount,
 }) {
   return (
     <div className="filter-panel">
+      {favMode && favCount > 0 && (
+        <div className="filter-panel__fav-info">
+          Goi y dua tren {favCount} bai hat trong gio yeu thich
+        </div>
+      )}
+
       <div className="filter-panel__grid">
         <div className="filter-panel__field">
           <label className="filter-panel__label">The loai yeu thich</label>
@@ -68,7 +76,7 @@ function FilterPanel({
               <circle cx="6" cy="18" r="3" />
               <circle cx="18" cy="16" r="3" />
             </svg>
-            Goi y nhac cho toi
+            {favMode ? "Goi y tu gio yeu thich" : "Goi y nhac cho toi"}
           </>
         )}
       </button>

@@ -1,3 +1,13 @@
+.filter-panel__fav-info {
+  padding: 10px 14px;
+  background: rgba(244, 114, 182, 0.08);
+  border: 1px solid rgba(244, 114, 182, 0.2);
+  border-radius: 8px;
+  color: #f472b6;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
 .filter-panel__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

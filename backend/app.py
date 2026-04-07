@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from engine import RecommendationEngine
 
+
 # ============================================================
 # Khoi tao Flask app & CORS
 # ============================================================
@@ -37,20 +38,26 @@ def get_stats():
 @app.route("/api/tracks", methods=["GET"])
 def get_tracks():
     """
-    Lay danh sach bai hat
+    Lay danh sach bai hat (co phan trang)
     Query params:
         - q: tu khoa tim kiem (optional)
-        - limit: so luong ket qua (default: 20)
+        - page: trang hien tai (default: 1)
+        - per_page: so bai hat moi trang (default: 20)
     """
     query = request.args.get("q", "").strip()
-    limit = request.args.get("limit", 20, type=int)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
 
-    if query:
-        tracks = engine.search_tracks(query, limit=limit)
-    else:
-        tracks = engine.get_all_tracks()[:limit]
+    result = engine.search_tracks(query, page=page, per_page=per_page)
 
-    return jsonify({"success": True, "data": tracks, "total": len(tracks)})
+    return jsonify({
+        "success": True,
+        "data": result["tracks"],
+        "total": result["total"],
+        "page": result["page"],
+        "per_page": result["per_page"],
+        "total_pages": result["total_pages"]
+    })
 
 
 @app.route("/api/tracks/<int:track_id>", methods=["GET"])
