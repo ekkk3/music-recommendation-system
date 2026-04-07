@@ -139,14 +139,8 @@ Gia tri trong [0, 1]: 1 = giong hoan toan, 0 = hoan toan khac.
 
 ## Dataset
 
-Dataset hien tai gom 80 bai hat voi cac features mo phong theo Spotify API.
+Dataset hien tai sử dụng https://www.kaggle.com/datasets/sanjanchaudhari/spotify-dataset bai hat voi cac features mo phong theo Spotify API.
 
-De mo rong, co the tai dataset tu Kaggle:
-- https://www.kaggle.com/datasets/bricevergnou/spotify-recommendation
-- https://www.kaggle.com/datasets/sanjanchaudhari/spotify-dataset
-- https://www.kaggle.com/datasets/wardabilal/spotify-global-music-dataset-20092025
-
-Sau khi tai, thay the file `backend/data/tracks.csv` voi dataset moi (dam bao co cac cot tuong ung).
 
 ---
 
